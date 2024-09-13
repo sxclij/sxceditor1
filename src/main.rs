@@ -23,14 +23,12 @@ impl LinkedList {
             tail: None,
         }
     }
-
     fn push_front(&mut self, value: char) {
         let new_node = Rc::new(RefCell::new(Node {
             value,
             next: None,
             prev: None,
         }));
-
         match self.head.take() {
             Some(old_head) => {
                 old_head.borrow_mut().prev = Some(Rc::downgrade(&new_node));
@@ -43,7 +41,6 @@ impl LinkedList {
             }
         }
     }
-
     fn push_prev(&mut self, value: char) {
         let new_node = Rc::new(RefCell::new(Node {
             value,
@@ -63,7 +60,6 @@ impl LinkedList {
             }
         }
     }
-
     fn pop_front(&mut self) -> Option<char> {
         self.head.take().map(|old_head| {
             match old_head.borrow_mut().next.take() {
@@ -78,7 +74,6 @@ impl LinkedList {
             Rc::try_unwrap(old_head).ok().unwrap().into_inner().value
         })
     }
-
     fn pop_prev(&mut self) -> Option<char> {
         self.tail.take().map(|old_tail| {
             match old_tail.borrow_mut().prev.take() {
@@ -94,15 +89,12 @@ impl LinkedList {
             Rc::try_unwrap(old_tail).ok().unwrap().into_inner().value
         })
     }
-
     fn read_head(&self) -> Option<char> {
         self.head.as_ref().map(|node| node.borrow().value)
     }
-
     fn get_next(&self, current: &Rc<RefCell<Node>>) -> Option<Rc<RefCell<Node>>> {
         current.borrow().next.as_ref().map(Rc::clone)
     }
-
     fn get_prev(&self, current: &Rc<RefCell<Node>>) -> Option<Rc<RefCell<Node>>> {
         current.borrow().prev.as_ref().and_then(Weak::upgrade)
     }
