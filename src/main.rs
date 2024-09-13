@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::collections::linked_list;
 use std::io::{stdin, stdout, Write};
 use std::rc::{Rc, Weak};
+use termion::cursor;
 use termion::event::Key;
 use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-struct Node {
+use termion::raw::IntoRawMode;struct Node {
     value: char,
     next: Option<Rc<RefCell<Node>>>,
     prev: Option<Weak<RefCell<Node>>>,
@@ -14,34 +14,21 @@ struct Node {
 struct LinkedList {
     head: Option<Rc<RefCell<Node>>>,
     tail: Option<Rc<RefCell<Node>>>,
+    cursor: Option<Rc<RefCell<Node>>>,
 }
-
+enum CursorDirection {
+    Left,
+    Right,
+}
 impl LinkedList {
     fn new() -> Self {
         LinkedList {
             head: None,
             tail: None,
+            cursor: None,
         }
     }
-    fn push_front(&mut self, value: char) {
-        let new_node = Rc::new(RefCell::new(Node {
-            value,
-            next: None,
-            prev: None,
-        }));
-        match self.head.take() {
-            Some(old_head) => {
-                old_head.borrow_mut().prev = Some(Rc::downgrade(&new_node));
-                new_node.borrow_mut().next = Some(old_head);
-                self.head = Some(new_node);
-            }
-            None => {
-                self.tail = Some(Rc::clone(&new_node));
-                self.head = Some(new_node);
-            }
-        }
-    }
-    fn push_prev(&mut self, value: char) {
+    fn push_back(&mut self, value: char) {
         let new_node = Rc::new(RefCell::new(Node {
             value,
             next: None,
@@ -60,21 +47,7 @@ impl LinkedList {
             }
         }
     }
-    fn pop_front(&mut self) -> Option<char> {
-        self.head.take().map(|old_head| {
-            match old_head.borrow_mut().next.take() {
-                Some(new_head) => {
-                    new_head.borrow_mut().prev = None;
-                    self.head = Some(new_head);
-                }
-                None => {
-                    self.tail = None;
-                }
-            }
-            Rc::try_unwrap(old_head).ok().unwrap().into_inner().value
-        })
-    }
-    fn pop_prev(&mut self) -> Option<char> {
+    fn pop_back(&mut self) -> Option<char> {
         self.tail.take().map(|old_tail| {
             match old_tail.borrow_mut().prev.take() {
                 Some(prev) => {
@@ -89,14 +62,56 @@ impl LinkedList {
             Rc::try_unwrap(old_tail).ok().unwrap().into_inner().value
         })
     }
+    fn move_cursor(&mut self, direction: CursorDirection) {
+        if let Some(current_cursor) = &self.cursor {
+            let next_cursor = match direction {
+                CursorDirection::Left => self.get_prev(current_cursor),
+                CursorDirection::Right => self.get_next(current_cursor),
+            };
+            if let Some(next) = next_cursor {
+                self.cursor = Some(next);
+            }
+        }
+    }
     fn read_head(&self) -> Option<char> {
         self.head.as_ref().map(|node| node.borrow().value)
     }
     fn get_next(&self, current: &Rc<RefCell<Node>>) -> Option<Rc<RefCell<Node>>> {
-        current.borrow().next.as_ref().map(Rc::clone)
+        current.borrow().next.as_ref().cloned()
     }
     fn get_prev(&self, current: &Rc<RefCell<Node>>) -> Option<Rc<RefCell<Node>>> {
         current.borrow().prev.as_ref().and_then(Weak::upgrade)
+    }
+    fn display(&self) -> std::io::Result<()> {
+        // Clear the screen and move cursor to top-left corner
+        print!("{}", termion::clear::All);
+        print!("{}", termion::cursor::Goto(1, 1));
+
+        if let Some(head) = &self.head {
+            let mut current = Rc::clone(head);
+            loop {
+                // Print the current node's value
+                print!("{} ", current.borrow().value);
+                std::io::stdout().flush()?;
+
+                // Show cursor if this is the current cursor position
+                if self.cursor.as_ref().map_or(false, |c| Rc::ptr_eq(c, &current)) {
+                    print!("{}", cursor::Show);
+                   std::io::stdout().flush()?;
+                }
+
+                // Move to next node or break if at the end
+                match self.get_next(&current) {
+                    Some(next) => current = next,
+                    None => break,
+                }
+            }
+        }
+
+        println!();
+        std::io::stdout().flush()?;
+
+        Ok(())
     }
 }
 
@@ -112,10 +127,10 @@ fn main() {
         if let Some(Ok(key)) = keys.next() {
             match key {
                 Key::Char(c) => {
-                    nodes.push_prev(c);
+                    nodes.push_back(c);
                 }
                 Key::Backspace => {
-                    nodes.pop_prev();
+                    nodes.pop_back();
                 }
                 Key::Esc => {
                     break;
@@ -123,18 +138,6 @@ fn main() {
                 _ => {}
             }
         }
-
-        print!("{}", "\x1b[1;1H");
-        if let Some(head) = &nodes.head {
-            let mut current = Rc::clone(head);
-            loop {
-                print!("{} ", current.borrow().value);
-                match nodes.get_next(&current) {
-                    Some(next) => current = next,
-                    None => break,
-                }
-            }
-        }
-        println!();
+        nodes.display().unwrap();
     }
 }
