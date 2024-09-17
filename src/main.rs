@@ -10,9 +10,12 @@ fn main() {
     stdout.flush().unwrap();
 
     loop {
+        print!("\x1b[1;1H");
         if let Some(Ok(key)) = keys.next() {
             match key {
-                Key::Char(c) => {}
+                Key::Char(c) => {
+                    print!("{}", c);
+                }
                 Key::Backspace => {}
                 Key::Esc => {
                     break;
@@ -20,5 +23,6 @@ fn main() {
                 _ => {}
             }
         }
+        stdout.flush().unwrap();
     }
 }
